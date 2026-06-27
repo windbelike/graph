@@ -105,8 +105,49 @@ input_backspace :: proc(input: ^Input_Field) {
 	input.len -= 1
 }
 
+parse_preset :: proc(text: string) -> (i_hat: Vec2, j_hat: Vec2, ok: bool) {
+	switch strings.to_lower(strings.trim_space(text)) {
+	case "shear", "shear x", "shear h", "horizontal shear", "h shear":
+		return {1, 0}, {1, 1}, true
+	case "shear y", "shear v", "vertical shear", "v shear":
+		return {1, 1}, {0, 1}, true
+	case "rotate 90", "rot 90", "rotate90":
+		return {0, -1}, {1, 0}, true
+	case "rotate -90", "rot -90", "rotate-90":
+		return {0, 1}, {-1, 0}, true
+	case "rotate 180", "rot 180", "rotate180":
+		return {-1, 0}, {0, -1}, true
+	case "rotate 45", "rot 45", "rotate45":
+		return {0.7071, -0.7071}, {0.7071, 0.7071}, true
+	case "rotate -45", "rot -45", "rotate-45":
+		return {0.7071, 0.7071}, {-0.7071, 0.7071}, true
+	case "scale 2", "scale2", "zoom 2", "x2":
+		return {2, 0}, {0, 2}, true
+	case "scale 0.5", "scale half", "zoom 0.5", "x0.5", "scale0.5":
+		return {0.5, 0}, {0, 0.5}, true
+	case "scale 3", "scale3", "zoom 3", "x3":
+		return {3, 0}, {0, 3}, true
+	case "flip x", "reflect x", "reflection x":
+		return {1, 0}, {0, -1}, true
+	case "flip y", "reflect y", "reflection y":
+		return {-1, 0}, {0, 1}, true
+	case "identity", "id", "reset", "r":
+		return {1, 0}, {0, 1}, true
+	}
+	return {}, {}, false
+}
+
 input_submit :: proc(input: ^Input_Field) -> (i_hat, j_hat: Vec2, ok: bool) {
-	text := string(input.buf[:input.len])
+	text := strings.trim_space(string(input.buf[:input.len]))
+
+	// Try preset command first
+	if i_hat, j_hat, ok = parse_preset(text); ok {
+		input.len = 0
+		input.cursor = 0
+		input.error_len = 0
+		return
+	}
+
 	fields := strings.fields(text)
 	if len(fields) < 4 {
 		copy(input.error_buf[:], "Need 4 numbers: i_x i_y j_x j_y")
@@ -158,6 +199,17 @@ input_thread_proc :: proc(data: rawptr) {
 			continue
 		}
 
+		// Try preset command
+		if i_hat, j_hat, ok := parse_preset(input); ok {
+			sync.mutex_lock(&state.mu)
+			state.i_hat = i_hat
+			state.j_hat = j_hat
+			state.changed = true
+			sync.mutex_unlock(&state.mu)
+			fmt.printf("Input: i-hat = (%.2f, %.2f), j-hat = (%.2f, %.2f) (composed with current)\n", i_hat.x, i_hat.y, j_hat.x, j_hat.y)
+			continue
+		}
+
 		fields := strings.fields(input)
 		if len(fields) >= 4 {
 			x1, ok1 := strconv.parse_f32(fields[0])
@@ -190,6 +242,7 @@ main :: proc() {
 	fmt.println("=== Linear Transform Visualizer ===")
 	fmt.println("Each input is composed (stacked) with the current transform.")
 	fmt.println("Format: i_x i_y j_x j_y    Example: 1 0 1 1")
+	fmt.println("Presets: shear, shear y, rotate 90, scale 2, flip x, ...")
 	fmt.println("Type 'reset' or 'r' to return to identity.")
 	fmt.println("Type 'quit', 'exit', or 'q' to stop.")
 
@@ -437,13 +490,7 @@ draw_info :: proc(history: ^History, i_hat, j_hat: Vec2) {
 	rl.DrawText("Blue lines = transformed grid", 20, 75, 18, text_color)
 	rl.DrawText("Gray lines = original grid", 20, 95, 18, text_color)
 
-	y: i32 = 125
-	rl.DrawText("Cumulative matrix:", 20, y, 16, matrix_color)
-	y += 20
-	rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", i_hat.x, j_hat.x), 20, y, 16, matrix_color)
-	y += 20
-	rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", i_hat.y, j_hat.y), 20, y, 16, matrix_color)
-	y += 25
+	y: i32 = 120
 
 	// Build chain text: M3 × M2 × M1
 	chain_len := history.index
@@ -465,21 +512,36 @@ draw_info :: proc(history: ^History, i_hat, j_hat: Vec2) {
 		rl.DrawText(fmt.ctprintf("%s", string(chain_buf[:chain_pos])), 20, y, 16, matrix_color)
 		y += 25
 
-		// Show each step's input matrix
+		// Show each step's input matrix horizontally
 		rl.DrawText("Each step matrix:", 20, y, 16, matrix_color)
 		y += 18
+		col_w: i32 = 110
 		for k := 1; k <= chain_len; k += 1 {
-			entry := history.entries[k]
-			rl.DrawText(fmt.ctprintf("M%d:", k), 20, y, 14, step_color)
-			y += 16
-			rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", entry.input_i.x, entry.input_j.x), 20, y, 14, step_color)
-			y += 16
-			rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", entry.input_i.y, entry.input_j.y), 20, y, 14, step_color)
-			y += 18
+			x := 20 + i32(k - 1) * col_w
+			rl.DrawText(fmt.ctprintf("M%d:", k), x, y, 14, step_color)
 		}
+		y += 16
+		for k := 1; k <= chain_len; k += 1 {
+			x := 20 + i32(k - 1) * col_w
+			entry := history.entries[k]
+			rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", entry.input_i.x, entry.input_j.x), x, y, 14, step_color)
+		}
+		y += 16
+		for k := 1; k <= chain_len; k += 1 {
+			x := 20 + i32(k - 1) * col_w
+			entry := history.entries[k]
+			rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", entry.input_i.y, entry.input_j.y), x, y, 14, step_color)
+		}
+		y += 30
 	}
 
-	y += 10
+	rl.DrawText("Cumulative matrix:", 20, y, 16, matrix_color)
+	y += 20
+	rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", i_hat.x, j_hat.x), 20, y, 16, matrix_color)
+	y += 20
+	rl.DrawText(fmt.ctprintf("| %.2f  %.2f |", i_hat.y, j_hat.y), 20, y, 16, matrix_color)
+	y += 25
+
 	rl.DrawText("Matrix multiplication:", 20, y, 16, matrix_color)
 	y += 20
 	rl.DrawText(fmt.ctprintf("[x']   [%.2f  %.2f] [x]", i_hat.x, j_hat.x), 20, y, 16, matrix_color)
@@ -508,8 +570,8 @@ draw_input_field :: proc(input: ^Input_Field, focused: bool) {
 	border_color := focused ? rl.Color{160, 160, 220, 255} : rl.Color{120, 120, 160, 255}
 	rl.DrawRectangleLines(box_x, box_y, box_w, box_h, border_color)
 
-	rl.DrawText("Enter basis vectors and press ENTER:", 150, box_y - 55, 18, rl.Color{220, 220, 240, 255})
-	rl.DrawText("Format: i_x i_y j_x j_y   Example: 1 0 1 1", 150, box_y - 33, 16, rl.Color{160, 160, 190, 255})
+	rl.DrawText("Enter basis vectors / preset and press ENTER:", 150, box_y - 55, 18, rl.Color{220, 220, 240, 255})
+	rl.DrawText("Format: i_x i_y j_x j_y  |  Presets: shear, rotate 90, scale 2, flip x", 150, box_y - 33, 16, rl.Color{160, 160, 190, 255})
 	rl.DrawText("Each input stacks on the current transform. Type 'reset' to clear.", 150, box_y - 14, 14, rl.Color{140, 140, 170, 255})
 
 	text_x := box_x + 10
