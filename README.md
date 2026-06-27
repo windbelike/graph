@@ -2,7 +2,7 @@
 
 A small interactive demo written in [Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/). It visualizes 2D linear transformations by showing how the standard grid and basis vectors change under arbitrary basis vectors.
 
-![Screenshot 2026-06-27 at 15.03.01](assets/Screenshot 2026-06-27 at 15.03.01.png)
+![Screenshot](assets/screenshot.png)
 
 ## Run
 
