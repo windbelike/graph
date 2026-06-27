@@ -100,7 +100,3 @@ You can also type basis vectors into the terminal where you launched the program
 ├── .gitignore     # Git ignore rules
 └── README.md      # This file
 ```
-
-## License
-
-Public domain / do whatever you want.
