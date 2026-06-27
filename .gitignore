@@ -1,0 +1,28 @@
+# Compiled binaries
+odin_graph
+transform
+*.exe
+*.out
+
+# Odin build artifacts
+*.o
+*.obj
+*.lib
+*.a
+*.so
+*.dll
+*.dylib
+
+# macOS
+.DS_Store
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Debug / profiling
+*.pdb
+*.ilk
