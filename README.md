@@ -2,6 +2,8 @@
 
 A small interactive demo written in [Odin](https://odin-lang.org/) with [raylib](https://www.raylib.com/). It visualizes 2D linear transformations by showing how the standard grid and basis vectors change under arbitrary basis vectors.
 
+![Screenshot 2026-06-27 at 15.03.01](/Users/sawyer/Desktop/graph/odin_graph/assets/Screenshot 2026-06-27 at 15.03.01.png)
+
 ## Run
 
 Requires the Odin compiler and raylib (raylib is bundled with Odin's `vendor:raylib`).
